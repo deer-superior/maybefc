@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Birds Forming "welcome"</title>
+  <title>Birds Forming "welcome" at the Top</title>
   <style>
     /* Perfect blue background */
     body {
@@ -78,12 +78,12 @@
     }
 
     // Create formation target points from text using an off‑screen canvas.
-    // We now use a canvas size of 800x500 so that the word "welcome" has extra vertical space.
+    // We use a canvas size of 800x500 so that the word "welcome" is fully rendered.
     function createFormationTargets(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
       offCanvas.width = 800;
-      offCanvas.height = 500;  // Increased height to avoid clipping.
+      offCanvas.height = 500;  // Extra vertical space
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
@@ -107,11 +107,11 @@
 
     // Get formation targets for the word "welcome".
     const formationPointsRaw = createFormationTargets("welcome");
+    // Remap the targets so that they are horizontally centered and near the top.
     let formationTargets = formationPointsRaw.map(pt => {
       return {
-        // Map the off‑screen 800x500 points so that the word is centered.
         x: pt.x + (canvas.width - 800) / 2,
-        y: pt.y + (canvas.height - 500) / 2
+        y: pt.y + 20  // 20 pixels from the top of the screen
       };
     });
 
@@ -175,7 +175,6 @@
           steeringSeparation.sub(this.velocity);
           steeringSeparation.limit(this.maxForce);
         }
-        // Use slightly lower weights so boids are a bit more independent.
         const alignmentWeight = 0.7;
         const cohesionWeight = 0.7;
         const separationWeight = 1.5;
@@ -284,7 +283,7 @@
       formationTargets = formationPointsRaw.map(pt => {
         return {
           x: pt.x + (canvas.width - 800) / 2,
-          y: pt.y + (canvas.height - 500) / 2
+          y: pt.y + 20  // Keep a 20px top margin
         };
       });
       for (let i = 0; i < boids.length; i++) {
