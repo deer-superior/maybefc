@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>welcome</title>
+  <title>Boid Flocking - Welcome Sequence</title>
   <style>
     body {
       margin: 0;
@@ -17,7 +17,6 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Setup canvas
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
@@ -40,8 +39,8 @@
     function createFormationPoints(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
-      offCanvas.width = 1000;
-      offCanvas.height = 300;
+      offCanvas.width = 800;
+      offCanvas.height = 250;
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
@@ -67,7 +66,7 @@
       }));
     }
 
-    const formationPoints = createFormationPoints("WELCOME");
+    const words = ["WELCOME", "TO", "MY", "PAGE"].map(createFormationPoints);
 
     class Boid {
       constructor(x, y) {
@@ -148,32 +147,40 @@
       }
     }
 
-    const boids = formationPoints.map(pt => new Boid(pt.x, pt.y));
+    const boids = words[0].map(pt => new Boid(pt.x, pt.y));
 
+    let formationIndex = 0;
     let formationMode = true;
-    setTimeout(() => {
-      formationMode = false;
-      boids.forEach(boid => {
-        let angle = Math.random() * 2 * Math.PI;
-        boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
+
+    function switchToNextFormation() {
+      formationIndex = (formationIndex + 1) % words.length;
+      let nextFormation = words[formationIndex];
+
+      boids.forEach((boid, i) => {
+        let target = nextFormation[i % nextFormation.length];
+        boid.formationTarget = { x: target.x, y: target.y };
       });
-    }, 3000);
+
+      formationMode = true;
+      setTimeout(() => {
+        formationMode = false;
+        boids.forEach(boid => {
+          let angle = Math.random() * 2 * Math.PI;
+          boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
+        });
+        scheduleNextFormation();
+      }, 2500);
+    }
 
     function scheduleNextFormation() {
-      let delay = 15000 + Math.random() * 10000;
-      setTimeout(() => {
-        formationMode = true;
-        setTimeout(() => {
-          formationMode = false;
-          boids.forEach(boid => {
-            let angle = Math.random() * 2 * Math.PI;
-            boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
-          });
-          scheduleNextFormation();
-        }, 2000);
-      }, delay);
+      let delay = 12000 + Math.random() * 10000;
+      setTimeout(() => switchToNextFormation(), delay);
     }
-    scheduleNextFormation();
+
+    setTimeout(() => {
+      formationMode = false;
+      scheduleNextFormation();
+    }, 2000);
 
     function animate() {
       requestAnimationFrame(animate);
