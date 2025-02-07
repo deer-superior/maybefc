@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Birds Forming the Word "guilt"</title>
+  <title>Birds Forming "guilt" with Random Intervals</title>
   <style>
     /* Perfect blue background */
     body {
@@ -18,7 +18,7 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Set up canvas.
+    // Set up the main canvas.
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
@@ -54,7 +54,7 @@
         return Math.hypot(this.x, this.y);
       }
       normalize() {
-        let m = this.mag();
+        const m = this.mag();
         if (m !== 0) this.div(m);
         return this;
       }
@@ -77,11 +77,10 @@
       }
     }
 
-    // Use an off-screen canvas to create target points from text.
+    // Create formation target points from text using an off‑screen canvas.
     function createFormationTargets(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
-      // Set a fixed offscreen size.
       offCanvas.width = 800;
       offCanvas.height = 300;
       offCtx.fillStyle = "black";
@@ -97,7 +96,7 @@
       for (let y = 0; y < offCanvas.height; y += 4) {
         for (let x = 0; x < offCanvas.width; x += 4) {
           let index = (y * offCanvas.width + x) * 4;
-          if (data[index + 3] > 128) { // If pixel is not transparent.
+          if (data[index + 3] > 128) { // Check the alpha channel.
             points.push({ x: x, y: y });
           }
         }
@@ -105,7 +104,7 @@
       return points;
     }
 
-    // Create formation target points for the word "guilt".
+    // Get formation targets for the word "guilt".
     const formationPointsRaw = createFormationTargets("guilt");
     let formationTargets = formationPointsRaw.map(pt => {
       return {
@@ -115,17 +114,21 @@
       };
     });
 
-    // Boid class.
+    // Boid class representing a bird.
     class Boid {
       constructor(x, y) {
         this.position = new Vector(x, y);
+        // Start with a random direction.
         let angle = Math.random() * 2 * Math.PI;
+        // Increase the starting speed.
         this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
-        this.velocity.setMag(1.5);
+        this.velocity.setMag(2); 
         this.acceleration = new Vector(0, 0);
-        this.maxForce = 0.03;
-        this.maxSpeed = 3;
-        // Each boid will be assigned a formation target.
+        // Increase maxForce for more agile steering.
+        this.maxForce = 0.05;  
+        // Increase maxSpeed for faster flight.
+        this.maxSpeed = 4;     
+        // Each boid is given a formation target.
         this.formationTarget = { x: x, y: y };
       }
       
@@ -137,7 +140,7 @@
         if (this.position.y < 0) this.position.y = canvas.height;
       }
       
-      // Normal flocking behavior.
+      // Standard flocking behavior.
       flock(boids) {
         const perceptionRadius = 75;
         let steeringAlignment = new Vector(0, 0);
@@ -174,29 +177,29 @@
           steeringSeparation.sub(this.velocity);
           steeringSeparation.limit(this.maxForce);
         }
-        const alignmentWeight = 1.0;
-        const cohesionWeight = 1.0;
-        const separationWeight = 2.0;
+        // Lower weights to let boids be a bit more independent.
+        const alignmentWeight = 0.7;
+        const cohesionWeight = 0.7;
+        const separationWeight = 1.5;
         this.acceleration
           .add(steeringAlignment.mult(alignmentWeight))
           .add(steeringCohesion.mult(cohesionWeight))
           .add(steeringSeparation.mult(separationWeight));
       }
       
-      // Steering toward the assigned formation target.
+      // Steering behavior to head toward the formation target.
       formationSteer() {
         let target = new Vector(this.formationTarget.x, this.formationTarget.y);
         let desired = Vector.sub(target, this.position);
         let d = desired.mag();
         desired.normalize();
-        // Slow down as we approach the target.
         if (d < 100) {
           desired.mult(this.maxSpeed * (d / 100));
         } else {
           desired.mult(this.maxSpeed);
         }
         let steer = Vector.sub(desired, this.velocity);
-        steer.limit(this.maxForce * 5); // Increase force to reach formation quickly.
+        steer.limit(this.maxForce * 5); // Increase force to reach the target quickly.
         this.acceleration.add(steer);
       }
       
@@ -213,10 +216,10 @@
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        // Draw a bird-like shape.
+        // Bird-like shape: pointed tip and two wing extensions.
         ctx.moveTo(10, 0);    // Tip.
         ctx.lineTo(-5, 4);    // Lower wing.
-        ctx.lineTo(0, 0);     // Body/transition.
+        ctx.lineTo(0, 0);     // Body.
         ctx.lineTo(-5, -4);   // Upper wing.
         ctx.closePath();
         ctx.fillStyle = "black";
@@ -225,7 +228,7 @@
       }
     }
 
-    // Create 1000 boids with random positions.
+    // Create 1000 boids at random positions.
     const boids = [];
     const numBoids = 1000;
     for (let i = 0; i < numBoids; i++) {
@@ -234,29 +237,37 @@
       boids.push(new Boid(x, y));
     }
     
-    // Assign each boid a formation target from formationTargets (cycling through if needed).
+    // Assign each boid a formation target (cycling through the target points).
     for (let i = 0; i < boids.length; i++) {
       boids[i].formationTarget = formationTargets[i % formationTargets.length];
     }
     
-    // Global variable to control formation mode.
+    // Global flag to control formation mode.
     let formationMode = false;
-    // Every 5 seconds, switch to formation mode for 2 seconds.
-    setInterval(() => {
-      formationMode = true;
-      setTimeout(() => {
-        formationMode = false;
-      }, 2000);
-    }, 5000);
     
-    // Animation loop.
+    // Schedule formation mode at a random interval between 15 and 25 seconds.
+    function scheduleNextFormation() {
+      // Random delay between 15000 and 25000 ms.
+      const delay = 15000 + Math.random() * 10000;
+      setTimeout(() => {
+        formationMode = true;
+        // Formation mode lasts 2 seconds.
+        setTimeout(() => {
+          formationMode = false;
+          scheduleNextFormation();
+        }, 2000);
+      }, delay);
+    }
+    scheduleNextFormation();
+    
+    // Main animation loop.
     function animate() {
       requestAnimationFrame(animate);
-      // Clear canvas with perfect blue.
+      // Clear the canvas with perfect blue.
       ctx.fillStyle = "#0000FF";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // For each boid, either apply formation steering or normal flocking.
+      // Update each boid.
       for (let boid of boids) {
         if (formationMode) {
           boid.formationSteer();
@@ -270,11 +281,10 @@
     }
     animate();
     
-    // Adjust canvas and formation targets on window resize.
+    // Recalculate canvas and formation targets on window resize.
     window.addEventListener("resize", () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      // Recalculate formationTargets to keep the text centered.
       formationTargets = formationPointsRaw.map(pt => {
         return {
           x: pt.x + (canvas.width - 800) / 2,
