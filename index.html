@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Birds Forming "welcome" at the Top</title>
+  <title>Birds Starting in Formation: "welcome"</title>
   <style>
     /* Perfect blue background */
     body {
@@ -78,12 +78,12 @@
     }
 
     // Create formation target points from text using an off‑screen canvas.
-    // We use a canvas size of 800x500 so that the word "welcome" is fully rendered.
+    // Off‑screen canvas size: 800×500 so that "welcome" is fully rendered.
     function createFormationTargets(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
       offCanvas.width = 800;
-      offCanvas.height = 500;  // Extra vertical space
+      offCanvas.height = 500;
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
@@ -97,7 +97,7 @@
       for (let y = 0; y < offCanvas.height; y += 4) {
         for (let x = 0; x < offCanvas.width; x += 4) {
           let index = (y * offCanvas.width + x) * 4;
-          if (data[index + 3] > 128) { // Pixel is opaque enough.
+          if (data[index + 3] > 128) { // If the pixel is opaque enough
             points.push({ x: x, y: y });
           }
         }
@@ -107,7 +107,7 @@
 
     // Get formation targets for the word "welcome".
     const formationPointsRaw = createFormationTargets("welcome");
-    // Remap the targets so that they are horizontally centered and near the top.
+    // Remap targets so they are horizontally centered and near the top.
     let formationTargets = formationPointsRaw.map(pt => {
       return {
         x: pt.x + (canvas.width - 800) / 2,
@@ -126,7 +126,7 @@
         this.acceleration = new Vector(0, 0);
         this.maxForce = 0.05;
         this.maxSpeed = 4;
-        // Each boid is assigned a formation target.
+        // Each boid gets a formation target.
         this.formationTarget = { x: x, y: y };
       }
       
@@ -184,13 +184,13 @@
           .add(steeringSeparation.mult(separationWeight));
       }
       
-      // Steering behavior to head toward the formation target.
+      // Steering toward the formation target.
       formationSteer() {
         let target = new Vector(this.formationTarget.x, this.formationTarget.y);
         let desired = Vector.sub(target, this.position);
         let d = desired.mag();
         desired.normalize();
-        // Use a slower speed (50% of maxSpeed) when forming.
+        // Use 50% of maxSpeed when forming.
         let formationSpeed = this.maxSpeed * 0.5;
         if (d < 100) {
           desired.mult(formationSpeed * (d / 100));
@@ -227,24 +227,24 @@
       }
     }
 
-    // Create 1000 boids at random positions.
+    // Create 1000 boids using formation positions.
     const boids = [];
     const numBoids = 1000;
+    // Instead of random positions, use the formation targets.
     for (let i = 0; i < numBoids; i++) {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * canvas.height;
-      boids.push(new Boid(x, y));
+      let target = formationTargets[i % formationTargets.length];
+      boids.push(new Boid(target.x, target.y));
     }
     
-    // Assign each boid a formation target (cycling through the target points).
+    // Also assign each boid its formation target (cycling through the target points).
     for (let i = 0; i < boids.length; i++) {
       boids[i].formationTarget = formationTargets[i % formationTargets.length];
     }
     
-    // Global flag to control formation mode.
-    let formationMode = false;
+    // Global flag to control formation mode. Start in formation.
+    let formationMode = true;
     
-    // Schedule formation mode at a random interval between 15 and 25 seconds.
+    // Schedule formation mode at random intervals between 15 and 25 seconds.
     function scheduleNextFormation() {
       const delay = 15000 + Math.random() * 10000;
       setTimeout(() => {
@@ -283,7 +283,7 @@
       formationTargets = formationPointsRaw.map(pt => {
         return {
           x: pt.x + (canvas.width - 800) / 2,
-          y: pt.y + 20  // Keep a 20px top margin
+          y: pt.y + 20  // Keep a 20px top margin.
         };
       });
       for (let i = 0; i < boids.length; i++) {
