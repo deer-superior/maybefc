@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>100 Small Slow Black Boids on Perfect Blue</title>
+  <style>
+    /* Set the background to perfect blue: red=0, green=0, blue=255 */
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #0000FF;
+    }
+    /* Make the canvas fill the viewport */
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="boidsCanvas"></canvas>
+  <script>
+    // Get the canvas and context, and size it to the window.
+    const canvas = document.getElementById("boidsCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 2D Vector class for common vector operations.
+    class Vector {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+      }
+      add(v) {
+        this.x += v.x;
+        this.y += v.y;
+        return this;
+      }
+      sub(v) {
+        this.x -= v.x;
+        this.y -= v.y;
+        return this;
+      }
+      mult(n) {
+        this.x *= n;
+        this.y *= n;
+        return this;
+      }
+      div(n) {
+        this.x /= n;
+        this.y /= n;
+        return this;
+      }
+      mag() {
+        return Math.hypot(this.x, this.y);
+      }
+      normalize() {
+        const m = this.mag();
+        if (m !== 0) {
+          this.div(m);
+        }
+        return this;
+      }
+      setMag(n) {
+        this.normalize();
+        this.mult(n);
+        return this;
+      }
+      limit(max) {
+        if (this.mag() > max) {
+          this.setMag(max);
+        }
+        return this;
+      }
+      copy() {
+        return new Vector(this.x, this.y);
+      }
+      static sub(v1, v2) {
+        return new Vector(v1.x - v2.x, v1.y - v2.y);
+      }
+    }
+
+    // Boid class representing each "bird"
+    class Boid {
+      constructor(x, y) {
+        this.position = new Vector(x, y);
+        // Start with a random velocity; we'll override this later for a formation.
+        let angle = Math.random() * 2 * Math.PI;
+        this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
+        // Set a slower initial speed.
+        this.velocity.setMag(1);
+        this.acceleration = new Vector(0, 0);
+        this.maxForce = 0.05; // Maximum steering force.
+        this.maxSpeed = 2;    // Lower maximum speed for slower movement.
+      }
+
+      // Wrap around the edges of the canvas.
+      edges() {
+        if (this.position.x > canvas.width)  this.position.x = 0;
+        if (this.position.x < 0)             this.position.x = canvas.width;
+        if (this.position.y > canvas.height) this.position.y = 0;
+        if (this.position.y < 0)             this.position.y = canvas.height;
+      }
+
+      // Apply the three boid rules: alignment, cohesion, and separation.
+      flock(boids) {
+        const perceptionRadius = 50;
+        let steeringAlignment = new Vector(0, 0);
+        let steeringCohesion = new Vector(0, 0);
+        let steeringSeparation = new Vector(0, 0);
+        let total = 0;
+        for (let other of boids) {
+          if (other !== this) {
+            const d = Vector.sub(this.position, other.position).mag();
+            if (d < perceptionRadius) {
+              // Alignment: steer toward the average velocity of neighbors.
+              steeringAlignment.add(other.velocity);
+              // Cohesion: steer toward the average position of neighbors.
+              steeringCohesion.add(other.position);
+              // Separation: steer away from nearby boids (weighted by distance).
+              let diff = Vector.sub(this.position, other.position);
+              diff.div(d);
+              steeringSeparation.add(diff);
+              total++;
+            }
+          }
+        }
+        if (total > 0) {
+          // Alignment
+          steeringAlignment.div(total);
+          steeringAlignment.setMag(this.maxSpeed);
+          steeringAlignment.sub(this.velocity);
+          steeringAlignment.limit(this.maxForce);
+
+          // Cohesion
+          steeringCohesion.div(total);
+          steeringCohesion.sub(this.position);
+          steeringCohesion.setMag(this.maxSpeed);
+          steeringCohesion.sub(this.velocity);
+          steeringCohesion.limit(this.maxForce);
+
+          // Separation
+          steeringSeparation.div(total);
+          steeringSeparation.setMag(this.maxSpeed);
+          steeringSeparation.sub(this.velocity);
+          steeringSeparation.limit(this.maxForce);
+        }
+        // Weighting the forces (separation is weighted a bit more to avoid crowding).
+        const alignmentWeight = 1.0;
+        const cohesionWeight  = 1.0;
+        const separationWeight = 1.5;
+        this.acceleration
+            .add(steeringAlignment.mult(alignmentWeight))
+            .add(steeringCohesion.mult(cohesionWeight))
+            .add(steeringSeparation.mult(separationWeight));
+      }
+
+      // Update position and velocity based on acceleration.
+      update() {
+        this.velocity.add(this.acceleration);
+        this.velocity.limit(this.maxSpeed);
+        this.position.add(this.velocity);
+        // Reset acceleration for the next frame.
+        this.acceleration.mult(0);
+      }
+
+      // Draw the boid as a smaller triangle pointing in the direction of its velocity.
+      draw(ctx) {
+        let angle = Math.atan2(this.velocity.y, this.velocity.x);
+        ctx.save();
+        ctx.translate(this.position.x, this.position.y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        // Smaller triangle: tip at (5, 0) and the base at (-5, ±2.5)
+        ctx.moveTo(5, 0);
+        ctx.lineTo(-5, 2.5);
+        ctx.lineTo(-5, -2.5);
+        ctx.closePath();
+        ctx.fillStyle = "black";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Create 100 boids arranged in a pyramid (V-shaped) formation.
+    // The formation will have 10 rows: 1, 3, 5, ... 19 boids per row.
+    const boids = [];
+    const rows = 10;
+    const verticalSpacing = 15;
+    const horizontalSpacing = 15;
+    const formationStartY = canvas.height / 2 - (rows * verticalSpacing) / 2;
+
+    for (let i = 0; i < rows; i++) {
+      // Number of boids in this row: odd numbers starting from 1.
+      const numBoids = 2 * i + 1;
+      const rowY = formationStartY + i * verticalSpacing;
+      // Calculate the total width of the row.
+      const rowWidth = (numBoids - 1) * horizontalSpacing;
+      // Center the row horizontally.
+      const startX = canvas.width / 2 - rowWidth / 2;
+      for (let j = 0; j < numBoids; j++) {
+        const posX = startX + j * horizontalSpacing;
+        const boid = new Boid(posX, rowY);
+        // Set initial velocity to the right so the formation moves as a group.
+        boid.velocity = new Vector(1, 0);
+        boids.push(boid);
+      }
+    }
+    // At this point, boids.length should be 100.
+
+    // Animation loop.
+    function animate() {
+      requestAnimationFrame(animate);
+      // Clear the canvas with perfect blue.
+      ctx.fillStyle = "#0000FF";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Update and draw each boid.
+      for (let boid of boids) {
+        boid.flock(boids);
+        boid.update();
+        boid.edges();
+        boid.draw(ctx);
+      }
+    }
+
+    animate();
+
+    // Update canvas dimensions if the window is resized.
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
