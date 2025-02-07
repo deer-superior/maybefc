@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>1000 Bird-Like Boids with Deep, Gradient Clouds</title>
+  <title>Birds Forming the Word "guilt"</title>
   <style>
     /* Perfect blue background */
     body {
@@ -18,13 +18,13 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Set up canvas
+    // Set up canvas.
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // 2D Vector class with common vector operations.
+    // 2D Vector class.
     class Vector {
       constructor(x, y) {
         this.x = x;
@@ -54,10 +54,8 @@
         return Math.hypot(this.x, this.y);
       }
       normalize() {
-        const m = this.mag();
-        if (m !== 0) {
-          this.div(m);
-        }
+        let m = this.mag();
+        if (m !== 0) this.div(m);
         return this;
       }
       setMag(n) {
@@ -79,7 +77,45 @@
       }
     }
 
-    // Boid class representing each "bird"
+    // Use an off-screen canvas to create target points from text.
+    function createFormationTargets(text) {
+      const offCanvas = document.createElement('canvas');
+      const offCtx = offCanvas.getContext('2d');
+      // Set a fixed offscreen size.
+      offCanvas.width = 800;
+      offCanvas.height = 300;
+      offCtx.fillStyle = "black";
+      offCtx.textAlign = "center";
+      offCtx.textBaseline = "middle";
+      offCtx.font = "bold 200px sans-serif";
+      offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+      
+      const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+      const data = imageData.data;
+      const points = [];
+      // Sample every 4 pixels to reduce the total count.
+      for (let y = 0; y < offCanvas.height; y += 4) {
+        for (let x = 0; x < offCanvas.width; x += 4) {
+          let index = (y * offCanvas.width + x) * 4;
+          if (data[index + 3] > 128) { // If pixel is not transparent.
+            points.push({ x: x, y: y });
+          }
+        }
+      }
+      return points;
+    }
+
+    // Create formation target points for the word "guilt".
+    const formationPointsRaw = createFormationTargets("guilt");
+    let formationTargets = formationPointsRaw.map(pt => {
+      return {
+        // Center the 800x300 text on the main canvas.
+        x: pt.x + (canvas.width - 800) / 2,
+        y: pt.y + (canvas.height - 300) / 2
+      };
+    });
+
+    // Boid class.
     class Boid {
       constructor(x, y) {
         this.position = new Vector(x, y);
@@ -87,21 +123,23 @@
         this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
         this.velocity.setMag(1.5);
         this.acceleration = new Vector(0, 0);
-        this.maxForce = 0.03;  // Lower steering force for smoother, more graceful turns.
-        this.maxSpeed = 3;     // A bit faster for dynamic movement.
+        this.maxForce = 0.03;
+        this.maxSpeed = 3;
+        // Each boid will be assigned a formation target.
+        this.formationTarget = { x: x, y: y };
       }
-
+      
       // Wrap around canvas edges.
       edges() {
-        if (this.position.x > canvas.width)  this.position.x = 0;
-        if (this.position.x < 0)             this.position.x = canvas.width;
+        if (this.position.x > canvas.width) this.position.x = 0;
+        if (this.position.x < 0) this.position.x = canvas.width;
         if (this.position.y > canvas.height) this.position.y = 0;
-        if (this.position.y < 0)             this.position.y = canvas.height;
+        if (this.position.y < 0) this.position.y = canvas.height;
       }
-
-      // Flocking behavior: alignment, cohesion, and separation.
+      
+      // Normal flocking behavior.
       flock(boids) {
-        const perceptionRadius = 75; // Increase radius for a more natural feel.
+        const perceptionRadius = 75;
         let steeringAlignment = new Vector(0, 0);
         let steeringCohesion = new Vector(0, 0);
         let steeringSeparation = new Vector(0, 0);
@@ -113,7 +151,7 @@
               steeringAlignment.add(other.velocity);
               steeringCohesion.add(other.position);
               let diff = Vector.sub(this.position, other.position);
-              diff.div(d);  // Weight by distance.
+              diff.div(d);
               steeringSeparation.add(diff);
               total++;
             }
@@ -124,45 +162,59 @@
           steeringAlignment.setMag(this.maxSpeed);
           steeringAlignment.sub(this.velocity);
           steeringAlignment.limit(this.maxForce);
-
+          
           steeringCohesion.div(total);
           steeringCohesion.sub(this.position);
           steeringCohesion.setMag(this.maxSpeed);
           steeringCohesion.sub(this.velocity);
           steeringCohesion.limit(this.maxForce);
-
+          
           steeringSeparation.div(total);
           steeringSeparation.setMag(this.maxSpeed);
           steeringSeparation.sub(this.velocity);
           steeringSeparation.limit(this.maxForce);
         }
-        // Weighting: emphasize separation slightly to avoid collisions.
         const alignmentWeight = 1.0;
-        const cohesionWeight  = 1.0;
+        const cohesionWeight = 1.0;
         const separationWeight = 2.0;
         this.acceleration
           .add(steeringAlignment.mult(alignmentWeight))
           .add(steeringCohesion.mult(cohesionWeight))
           .add(steeringSeparation.mult(separationWeight));
       }
-
-      // Update velocity and position.
+      
+      // Steering toward the assigned formation target.
+      formationSteer() {
+        let target = new Vector(this.formationTarget.x, this.formationTarget.y);
+        let desired = Vector.sub(target, this.position);
+        let d = desired.mag();
+        desired.normalize();
+        // Slow down as we approach the target.
+        if (d < 100) {
+          desired.mult(this.maxSpeed * (d / 100));
+        } else {
+          desired.mult(this.maxSpeed);
+        }
+        let steer = Vector.sub(desired, this.velocity);
+        steer.limit(this.maxForce * 5); // Increase force to reach formation quickly.
+        this.acceleration.add(steer);
+      }
+      
       update() {
         this.velocity.add(this.acceleration);
         this.velocity.limit(this.maxSpeed);
         this.position.add(this.velocity);
         this.acceleration.mult(0);
       }
-
-      // Draw the boid as a bird-like silhouette.
+      
       draw(ctx) {
         let angle = Math.atan2(this.velocity.y, this.velocity.x);
         ctx.save();
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        // A shape with a pointed tip and two slight wing extensions.
-        ctx.moveTo(10, 0);    // Tip of the bird.
+        // Draw a bird-like shape.
+        ctx.moveTo(10, 0);    // Tip.
         ctx.lineTo(-5, 4);    // Lower wing.
         ctx.lineTo(0, 0);     // Body/transition.
         ctx.lineTo(-5, -4);   // Upper wing.
@@ -173,54 +225,7 @@
       }
     }
 
-    // Cloud class for big, deep clouds with a fluid gradient.
-    class Cloud {
-      constructor(x, y, scale, speed) {
-        this.x = x;
-        this.y = y;
-        this.scale = scale;
-        this.speed = speed;
-      }
-      update() {
-        this.x += this.speed;
-        // Reset cloud to left side when it drifts off the right.
-        if (this.x > canvas.width + 200) {
-          this.x = -200;
-        }
-      }
-      draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.scale(this.scale, this.scale);
-        // Create a radial gradient that goes from pure white to a very slight dark tint.
-        let grad = ctx.createRadialGradient(150, 0, 30, 150, 0, 200);
-        grad.addColorStop(0, "rgba(255,255,255,1)");    // Center: pure white.
-        grad.addColorStop(1, "rgba(0,0,0,0.1)");          // Edge: a very subtle dark tint.
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        // Draw a big, flowing cloud shape using arcs.
-        ctx.arc(150, 0, 200, Math.PI * 0.5, Math.PI * 1.5);
-        ctx.arc(350, -40, 200, Math.PI, Math.PI * 1.75);
-        ctx.arc(550, 0, 200, Math.PI * 1.2, Math.PI * 1.8);
-        ctx.arc(700, 40, 200, Math.PI * 1.5, Math.PI * 0.5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // Create an array of clouds with varying sizes and depths.
-    const clouds = [];
-    const numClouds = 5;
-    for (let i = 0; i < numClouds; i++) {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * (canvas.height / 2);
-      let scale = Math.random() * 0.5 + 1.0;  // Bigger clouds.
-      let speed = Math.random() * 0.5 + 0.1;    // Varying speeds.
-      clouds.push(new Cloud(x, y, scale, speed));
-    }
-
-    // Create 1000 boids with random starting positions.
+    // Create 1000 boids with random positions.
     const boids = [];
     const numBoids = 1000;
     for (let i = 0; i < numBoids; i++) {
@@ -228,34 +233,57 @@
       let y = Math.random() * canvas.height;
       boids.push(new Boid(x, y));
     }
-
+    
+    // Assign each boid a formation target from formationTargets (cycling through if needed).
+    for (let i = 0; i < boids.length; i++) {
+      boids[i].formationTarget = formationTargets[i % formationTargets.length];
+    }
+    
+    // Global variable to control formation mode.
+    let formationMode = false;
+    // Every 5 seconds, switch to formation mode for 2 seconds.
+    setInterval(() => {
+      formationMode = true;
+      setTimeout(() => {
+        formationMode = false;
+      }, 2000);
+    }, 5000);
+    
     // Animation loop.
     function animate() {
       requestAnimationFrame(animate);
-      // Draw the perfect blue background.
+      // Clear canvas with perfect blue.
       ctx.fillStyle = "#0000FF";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Update and draw clouds (background layer).
-      for (let cloud of clouds) {
-        cloud.update();
-        cloud.draw(ctx);
-      }
-
-      // Update and draw boids (foreground layer).
+      
+      // For each boid, either apply formation steering or normal flocking.
       for (let boid of boids) {
-        boid.flock(boids);
+        if (formationMode) {
+          boid.formationSteer();
+        } else {
+          boid.flock(boids);
+        }
         boid.update();
         boid.edges();
         boid.draw(ctx);
       }
     }
     animate();
-
-    // Adjust canvas dimensions on window resize.
+    
+    // Adjust canvas and formation targets on window resize.
     window.addEventListener("resize", () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      // Recalculate formationTargets to keep the text centered.
+      formationTargets = formationPointsRaw.map(pt => {
+        return {
+          x: pt.x + (canvas.width - 800) / 2,
+          y: pt.y + (canvas.height - 300) / 2
+        };
+      });
+      for (let i = 0; i < boids.length; i++) {
+        boids[i].formationTarget = formationTargets[i % formationTargets.length];
+      }
     });
   </script>
 </body>
