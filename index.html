@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Birds Forming "guilt" with Random Intervals</title>
+  <title>Birds Forming "guilt" with Adjusted Formation</title>
   <style>
     /* Perfect blue background */
     body {
@@ -82,7 +82,7 @@
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
       offCanvas.width = 800;
-      offCanvas.height = 300;
+      offCanvas.height = 400;  // Increased height to avoid clipping
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
@@ -108,9 +108,9 @@
     const formationPointsRaw = createFormationTargets("guilt");
     let formationTargets = formationPointsRaw.map(pt => {
       return {
-        // Center the 800x300 text on the main canvas.
+        // Center the 800x400 text on the main canvas.
         x: pt.x + (canvas.width - 800) / 2,
-        y: pt.y + (canvas.height - 300) / 2
+        y: pt.y + (canvas.height - 400) / 2
       };
     });
 
@@ -122,12 +122,12 @@
         let angle = Math.random() * 2 * Math.PI;
         // Increase the starting speed.
         this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
-        this.velocity.setMag(2); 
+        this.velocity.setMag(2);
         this.acceleration = new Vector(0, 0);
         // Increase maxForce for more agile steering.
-        this.maxForce = 0.05;  
+        this.maxForce = 0.05;
         // Increase maxSpeed for faster flight.
-        this.maxSpeed = 4;     
+        this.maxSpeed = 4;
         // Each boid is given a formation target.
         this.formationTarget = { x: x, y: y };
       }
@@ -193,10 +193,12 @@
         let desired = Vector.sub(target, this.position);
         let d = desired.mag();
         desired.normalize();
+        // Use a slower speed when forming (50% of maxSpeed).
+        let formationSpeed = this.maxSpeed * 0.5;
         if (d < 100) {
-          desired.mult(this.maxSpeed * (d / 100));
+          desired.mult(formationSpeed * (d / 100));
         } else {
-          desired.mult(this.maxSpeed);
+          desired.mult(formationSpeed);
         }
         let steer = Vector.sub(desired, this.velocity);
         steer.limit(this.maxForce * 5); // Increase force to reach the target quickly.
@@ -288,7 +290,7 @@
       formationTargets = formationPointsRaw.map(pt => {
         return {
           x: pt.x + (canvas.width - 800) / 2,
-          y: pt.y + (canvas.height - 300) / 2
+          y: pt.y + (canvas.height - 400) / 2  // Use 400 since offscreen height is now 400.
         };
       });
       for (let i = 0; i < boids.length; i++) {
