@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Boids Forming "WELCOME"</title>
+  <title>welcome</title>
   <style>
-    /* Perfect blue background */
     body {
       margin: 0;
       overflow: hidden;
-      background-color: #0000FF;
+      background-color: #0000FF; /* Perfect Blue */
     }
     canvas {
       display: block;
@@ -18,17 +17,14 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Set up the canvas.
+    // Setup canvas
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
     class Vector {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-      }
+      constructor(x, y) { this.x = x; this.y = y; }
       add(v) { this.x += v.x; this.y += v.y; return this; }
       sub(v) { this.x -= v.x; this.y -= v.y; return this; }
       mult(n) { this.x *= n; this.y *= n; return this; }
@@ -41,15 +37,15 @@
       static sub(v1, v2) { return new Vector(v1.x - v2.x, v1.y - v2.y); }
     }
 
-    function createFormationTargets(text) {
+    function createFormationPoints(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
-      offCanvas.width = 1000;  
-      offCanvas.height = 400;  
+      offCanvas.width = 1000;
+      offCanvas.height = 300;
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
-      offCtx.font = "bold 300px sans-serif";  
+      offCtx.font = "bold 200px sans-serif";
       offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
 
       const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
@@ -59,20 +55,19 @@
       for (let y = 0; y < offCanvas.height; y += 2) {  
         for (let x = 0; x < offCanvas.width; x += 2) {  
           let index = (y * offCanvas.width + x) * 4;
-          if (data[index + 3] > 128) { 
+          if (data[index + 3] > 128) {
             points.push({ x, y });
           }
         }
       }
-      return points;
+
+      return points.map(pt => ({
+        x: pt.x + (canvas.width - offCanvas.width) / 2,
+        y: pt.y + 80  
+      }));
     }
 
-    const formationPointsRaw = createFormationTargets("WELCOME");
-
-    let formationTargets = formationPointsRaw.map(pt => ({
-      x: pt.x + (canvas.width - 1000) / 2,  
-      y: pt.y + 50  
-    }));
+    const formationPoints = createFormationPoints("WELCOME");
 
     class Boid {
       constructor(x, y) {
@@ -80,8 +75,8 @@
         let angle = Math.random() * 2 * Math.PI;
         this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
         this.acceleration = new Vector(0, 0);
+        this.maxSpeed = 3.5;
         this.maxForce = 0.05;
-        this.maxSpeed = 4;
         this.formationTarget = { x, y };
       }
 
@@ -125,7 +120,7 @@
         let desired = Vector.sub(target, this.position);
         let d = desired.mag();
         desired.normalize();
-        let speed = this.maxSpeed * 0.5;
+        let speed = this.maxSpeed * 0.3;  
         desired.mult(d < 100 ? speed * (d / 100) : speed);
         this.acceleration.add(Vector.sub(desired, this.velocity).limit(this.maxForce * 5));
       }
@@ -142,10 +137,10 @@
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(-5, 4);
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-4, 3);
         ctx.lineTo(0, 0);
-        ctx.lineTo(-5, -4);
+        ctx.lineTo(-4, -3);
         ctx.closePath();
         ctx.fillStyle = "black";
         ctx.fill();
@@ -153,16 +148,7 @@
       }
     }
 
-    const boids = [];
-    const numBoids = 1000;
-    for (let i = 0; i < numBoids; i++) {
-      let target = formationTargets[i % formationTargets.length];
-      boids.push(new Boid(target.x, target.y));
-    }
-
-    for (let i = 0; i < boids.length; i++) {
-      boids[i].formationTarget = formationTargets[i % formationTargets.length];
-    }
+    const boids = formationPoints.map(pt => new Boid(pt.x, pt.y));
 
     let formationMode = true;
     setTimeout(() => {
