@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>100 Small Slow Black Boids on Perfect Blue</title>
+  <title>1000 Boids with Clouds on Perfect Blue</title>
   <style>
-    /* Set the background to perfect blue: red=0, green=0, blue=255 */
+    /* Perfect blue background: red=0, green=0, blue=255 */
     body {
       margin: 0;
       overflow: hidden;
       background-color: #0000FF;
     }
-    /* Make the canvas fill the viewport */
+    /* Canvas fills the viewport */
     canvas {
       display: block;
     }
@@ -19,13 +19,13 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Get the canvas and context, and size it to the window.
+    // Set up the canvas.
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // 2D Vector class for common vector operations.
+    // A simple 2D Vector class.
     class Vector {
       constructor(x, y) {
         this.x = x;
@@ -80,20 +80,18 @@
       }
     }
 
-    // Boid class representing each "bird"
+    // Boid class for each "bird"
     class Boid {
       constructor(x, y) {
         this.position = new Vector(x, y);
-        // Start with a random velocity; we'll override this later for a formation.
+        // Give each boid a random direction with a small speed.
         let angle = Math.random() * 2 * Math.PI;
-        this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
-        // Set a slower initial speed.
-        this.velocity.setMag(1);
+        this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(1);
         this.acceleration = new Vector(0, 0);
-        this.maxForce = 0.05; // Maximum steering force.
-        this.maxSpeed = 2;    // Lower maximum speed for slower movement.
+        this.maxForce = 0.05;
+        this.maxSpeed = 2;
       }
-
+      
       // Wrap around the edges of the canvas.
       edges() {
         if (this.position.x > canvas.width)  this.position.x = 0;
@@ -102,7 +100,7 @@
         if (this.position.y < 0)             this.position.y = canvas.height;
       }
 
-      // Apply the three boid rules: alignment, cohesion, and separation.
+      // Calculate steering forces based on nearby boids.
       flock(boids) {
         const perceptionRadius = 50;
         let steeringAlignment = new Vector(0, 0);
@@ -113,11 +111,11 @@
           if (other !== this) {
             const d = Vector.sub(this.position, other.position).mag();
             if (d < perceptionRadius) {
-              // Alignment: steer toward the average velocity of neighbors.
+              // Alignment: steer toward the average velocity.
               steeringAlignment.add(other.velocity);
-              // Cohesion: steer toward the average position of neighbors.
+              // Cohesion: steer toward the average position.
               steeringCohesion.add(other.position);
-              // Separation: steer away from nearby boids (weighted by distance).
+              // Separation: steer away (weighted by distance).
               let diff = Vector.sub(this.position, other.position);
               diff.div(d);
               steeringSeparation.add(diff);
@@ -145,7 +143,7 @@
           steeringSeparation.sub(this.velocity);
           steeringSeparation.limit(this.maxForce);
         }
-        // Weighting the forces (separation is weighted a bit more to avoid crowding).
+        // Apply weighted steering.
         const alignmentWeight = 1.0;
         const cohesionWeight  = 1.0;
         const separationWeight = 1.5;
@@ -154,24 +152,23 @@
             .add(steeringCohesion.mult(cohesionWeight))
             .add(steeringSeparation.mult(separationWeight));
       }
-
-      // Update position and velocity based on acceleration.
+      
+      // Update velocity and position.
       update() {
         this.velocity.add(this.acceleration);
         this.velocity.limit(this.maxSpeed);
         this.position.add(this.velocity);
-        // Reset acceleration for the next frame.
         this.acceleration.mult(0);
       }
-
-      // Draw the boid as a smaller triangle pointing in the direction of its velocity.
+      
+      // Draw the boid as a small black triangle.
       draw(ctx) {
         let angle = Math.atan2(this.velocity.y, this.velocity.x);
         ctx.save();
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        // Smaller triangle: tip at (5, 0) and the base at (-5, ±2.5)
+        // Smaller triangle: tip at (5, 0) and base points at (-5, ±2.5)
         ctx.moveTo(5, 0);
         ctx.lineTo(-5, 2.5);
         ctx.lineTo(-5, -2.5);
@@ -182,40 +179,72 @@
       }
     }
 
-    // Create 100 boids arranged in a pyramid (V-shaped) formation.
-    // The formation will have 10 rows: 1, 3, 5, ... 19 boids per row.
-    const boids = [];
-    const rows = 10;
-    const verticalSpacing = 15;
-    const horizontalSpacing = 15;
-    const formationStartY = canvas.height / 2 - (rows * verticalSpacing) / 2;
-
-    for (let i = 0; i < rows; i++) {
-      // Number of boids in this row: odd numbers starting from 1.
-      const numBoids = 2 * i + 1;
-      const rowY = formationStartY + i * verticalSpacing;
-      // Calculate the total width of the row.
-      const rowWidth = (numBoids - 1) * horizontalSpacing;
-      // Center the row horizontally.
-      const startX = canvas.width / 2 - rowWidth / 2;
-      for (let j = 0; j < numBoids; j++) {
-        const posX = startX + j * horizontalSpacing;
-        const boid = new Boid(posX, rowY);
-        // Set initial velocity to the right so the formation moves as a group.
-        boid.velocity = new Vector(1, 0);
-        boids.push(boid);
+    // Cloud class for simple drifting clouds.
+    class Cloud {
+      constructor(x, y, scale, speed) {
+        this.x = x;
+        this.y = y;
+        this.scale = scale;
+        this.speed = speed;
+      }
+      update() {
+        this.x += this.speed;
+        // When a cloud moves off the right edge, reset to the left.
+        if (this.x > canvas.width + 100) {
+          this.x = -100;
+        }
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+        ctx.beginPath();
+        // Draw a simple cloud shape with overlapping arcs.
+        ctx.arc(0, 0, 20, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(25, -10, 20, Math.PI * 1, Math.PI * 1.85);
+        ctx.arc(50, 0, 20, Math.PI * 1.37, Math.PI * 1.91);
+        ctx.arc(65, 10, 20, Math.PI * 1.5, Math.PI * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
     }
-    // At this point, boids.length should be 100.
 
-    // Animation loop.
+    // Create an array of clouds.
+    const clouds = [];
+    const numClouds = 7;
+    for (let i = 0; i < numClouds; i++) {
+      let x = Math.random() * canvas.width;
+      let y = Math.random() * (canvas.height / 2);  // Clouds in the upper half
+      let scale = Math.random() * 0.5 + 0.5;         // Scale between 0.5 and 1.0
+      let speed = Math.random() * 0.3 + 0.1;           // Slow horizontal drift
+      clouds.push(new Cloud(x, y, scale, speed));
+    }
+
+    // Create 1000 boids with random initial positions.
+    const boids = [];
+    const numBoids = 1000;
+    for (let i = 0; i < numBoids; i++) {
+      let x = Math.random() * canvas.width;
+      let y = Math.random() * canvas.height;
+      boids.push(new Boid(x, y));
+    }
+
+    // The animation loop.
     function animate() {
       requestAnimationFrame(animate);
-      // Clear the canvas with perfect blue.
+      // Fill the canvas with perfect blue.
       ctx.fillStyle = "#0000FF";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Update and draw each boid.
+      
+      // Update and draw the clouds (background layer).
+      for (let cloud of clouds) {
+        cloud.update();
+        cloud.draw(ctx);
+      }
+      
+      // For each boid, apply flocking behavior, update its state, and draw it.
       for (let boid of boids) {
         boid.flock(boids);
         boid.update();
@@ -223,10 +252,10 @@
         boid.draw(ctx);
       }
     }
-
+    
     animate();
 
-    // Update canvas dimensions if the window is resized.
+    // Update canvas dimensions on window resize.
     window.addEventListener("resize", () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
