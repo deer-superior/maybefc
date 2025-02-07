@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Boids Word Formation Sequence</title>
+  <title>Boids Word Formation</title>
   <style>
     /* Perfect blue background */
     body {
@@ -22,24 +22,23 @@
       // === Canvas Setup ===
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
-      
       function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        // When resizing, re-compute formations.
+        // Recompute formation points on resize.
         formations = words.map(word => createFormationPoints(word));
       }
-      
       resizeCanvas();
       window.addEventListener("resize", resizeCanvas);
-      
-      // === Global Variables & State ===
-      // Declare words first so they’re available for functions.
+
+      // === Global State & Configuration ===
+      // The sequence of words to form:
       const words = ["WELCOME", "TO", "MY", "PAGE"];
-      let formations = [];  // Will be computed below.
-      let currentWordIndex = 0;  // Which word to form next.
-      let formationActive = false; // false = free flocking, true = forming word.
-      
+      // Will hold an array of formation points for each word.
+      let formations = words.map(word => createFormationPoints(word));
+      let currentWordIndex = 0;       // Which word to form next.
+      let formationActive = false;    // false = free flocking, true = forming word.
+
       // === Vector Class ===
       class Vector {
         constructor(x, y) { this.x = x; this.y = y; }
@@ -48,13 +47,13 @@
         mult(n) { this.x *= n; this.y *= n; return this; }
         div(n) { this.x /= n; this.y /= n; return this; }
         mag() { return Math.hypot(this.x, this.y); }
-        normalize() { const m = this.mag(); if (m !== 0) this.div(m); return this; }
+        normalize() { let m = this.mag(); if(m !== 0) this.div(m); return this; }
         setMag(n) { this.normalize(); this.mult(n); return this; }
-        limit(max) { if (this.mag() > max) this.setMag(max); return this; }
+        limit(max) { if(this.mag() > max) this.setMag(max); return this; }
         copy() { return new Vector(this.x, this.y); }
         static sub(v1, v2) { return new Vector(v1.x - v2.x, v1.y - v2.y); }
       }
-      
+
       // === Boid Class ===
       class Boid {
         constructor(x, y) {
@@ -64,17 +63,17 @@
           this.acceleration = new Vector(0, 0);
           this.maxSpeed = 4;
           this.maxForce = 0.05;
-          // formationTarget will be updated when formation mode is active.
+          // formationTarget will be set when formation mode is active.
           this.formationTarget = { x: x, y: y };
         }
-        // Wrap around the edges.
+        // Wrap around edges.
         edges() {
           if (this.position.x > canvas.width) this.position.x = 0;
           if (this.position.x < 0) this.position.x = canvas.width;
           if (this.position.y > canvas.height) this.position.y = 0;
           if (this.position.y < 0) this.position.y = canvas.height;
         }
-        // Free flocking behavior (alignment, cohesion, separation).
+        // Flocking behavior: alignment, cohesion, separation.
         flock(boids) {
           let perception = 75;
           let alignment = new Vector(0, 0);
@@ -101,13 +100,13 @@
           this.acceleration.add(cohesion.mult(0.7));
           this.acceleration.add(separation.mult(1.5));
         }
-        // Formation steering: steer toward the formation target at reduced speed.
+        // Formation steering: steer toward the assigned formation target at a reduced speed.
         formationSteer() {
           let target = new Vector(this.formationTarget.x, this.formationTarget.y);
           let desired = Vector.sub(target, this.position);
           let d = desired.mag();
           desired.normalize();
-          let formSpeed = this.maxSpeed * 0.3;
+          let formSpeed = this.maxSpeed * 0.3;  // 30% of max speed
           if (d < 100) {
             desired.mult(formSpeed * (d / 100));
           } else {
@@ -139,13 +138,14 @@
           ctx.restore();
         }
       }
-      
+
       // === Formation Points Generator ===
-      // Draw the given word on an off-screen canvas and sample every pixel.
-      // Offscreen canvas width is half of the main canvas width; height is offWidth * 0.5.
+      // This function draws a word on an off-screen canvas and returns an array of points
+      // representing the opaque pixels. The off-screen canvas width is half of the main canvas width,
+      // and its height is computed as offWidth * 0.5. Points are sampled every pixel for high density.
       function createFormationPoints(word) {
         const offWidth = canvas.width / 2;
-        const offHeight = offWidth * 0.5;  // Adjust aspect ratio as desired.
+        const offHeight = offWidth * 0.5;  // Adjust as needed for aspect ratio
         const offCanvas = document.createElement("canvas");
         offCanvas.width = offWidth;
         offCanvas.height = offHeight;
@@ -159,12 +159,12 @@
         const imageData = offCtx.getImageData(0, 0, offWidth, offHeight);
         const data = imageData.data;
         const points = [];
-        // Sample every 1 pixel for maximum density.
+        // Sample every 1 pixel.
         for (let y = 0; y < offHeight; y++) {
           for (let x = 0; x < offWidth; x++) {
-            let idx = (y * offWidth + x) * 4;
-            if (data[idx + 3] > 128) {
-              // Map the point: center horizontally; add a top margin (50px).
+            let index = (y * offWidth + x) * 4;
+            if (data[index + 3] > 128) { // if pixel is opaque
+              // Map the point to the main canvas: center horizontally and add a top margin (50px).
               points.push({
                 x: x + (canvas.width - offWidth) / 2,
                 y: y + 50
@@ -174,10 +174,10 @@
         }
         return points;
       }
-      
+
       // === Create Formations for Each Word ===
       formations = words.map(word => createFormationPoints(word));
-      
+
       // === Create Boids ===
       const boids = [];
       const numBoids = 1000;
@@ -187,8 +187,8 @@
         let y = Math.random() * canvas.height;
         boids.push(new Boid(x, y));
       }
-      
-      // === Global Transition Functions ===
+
+      // === Transition Functions ===
       // Update each boid's formation target based on the current formation.
       function updateBoidsFormationTargets() {
         const currentFormation = formations[currentWordIndex];
@@ -197,40 +197,43 @@
           boid.formationTarget = { x: pt.x, y: pt.y };
         });
       }
-      
-      // Start formation: switch to formation mode, update targets, and hold for 2 seconds.
+
+      // Start formation mode: boids converge to form the current word.
       function startFormation() {
         formationActive = true;
         updateBoidsFormationTargets();
+        // Hold formation for 2 seconds.
         setTimeout(endFormation, 2000);
       }
-      
-      // End formation: switch back to free flocking; scatter boids.
+
+      // End formation mode: scatter boids and resume free flocking.
       function endFormation() {
         formationActive = false;
         boids.forEach(boid => {
-          let randAngle = Math.random() * 2 * Math.PI;
-          boid.velocity = new Vector(Math.cos(randAngle), Math.sin(randAngle)).setMag(2);
+          // Give each boid a random scattering velocity.
+          let angle = Math.random() * 2 * Math.PI;
+          boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
         });
-        // After 10 seconds of free flocking, schedule next formation.
+        // After 10 seconds of free flocking, schedule the next formation.
         setTimeout(scheduleNextFormation, 10000);
       }
-      
-      // Schedule next formation: wait a random delay (15–25 seconds), then form the next word.
+
+      // Schedule the next formation: wait a random delay (15–25 seconds), then form the next word.
       function scheduleNextFormation() {
         currentWordIndex = (currentWordIndex + 1) % formations.length;
         let delay = 15000 + Math.random() * 10000;
         setTimeout(startFormation, delay);
       }
-      
-      // Initially, let boids flock freely; after an initial delay, start formation.
+
+      // Start with free flocking. After an initial delay, start the formation mode.
       let initialDelay = 15000 + Math.random() * 10000;
       setTimeout(startFormation, initialDelay);
-      
+
       // === Main Animation Loop ===
       function animate() {
         requestAnimationFrame(animate);
-        ctx.fillStyle = "#0000FF"; // Perfect blue background.
+        // Clear the canvas with perfect blue.
+        ctx.fillStyle = "#0000FF";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         boids.forEach(boid => {
           if (formationActive) {
