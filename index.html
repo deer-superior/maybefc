@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Birds Starting in Formation: "welcome"</title>
+  <title>Boids Forming "WELCOME"</title>
   <style>
     /* Perfect blue background */
     body {
@@ -18,204 +18,130 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Set up the main canvas.
+    // Set up the canvas.
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // 2D Vector class.
     class Vector {
       constructor(x, y) {
         this.x = x;
         this.y = y;
       }
-      add(v) {
-        this.x += v.x;
-        this.y += v.y;
-        return this;
-      }
-      sub(v) {
-        this.x -= v.x;
-        this.y -= v.y;
-        return this;
-      }
-      mult(n) {
-        this.x *= n;
-        this.y *= n;
-        return this;
-      }
-      div(n) {
-        this.x /= n;
-        this.y /= n;
-        return this;
-      }
-      mag() {
-        return Math.hypot(this.x, this.y);
-      }
-      normalize() {
-        const m = this.mag();
-        if (m !== 0) this.div(m);
-        return this;
-      }
-      setMag(n) {
-        this.normalize();
-        this.mult(n);
-        return this;
-      }
-      limit(max) {
-        if (this.mag() > max) {
-          this.setMag(max);
-        }
-        return this;
-      }
-      copy() {
-        return new Vector(this.x, this.y);
-      }
-      static sub(v1, v2) {
-        return new Vector(v1.x - v2.x, v1.y - v2.y);
-      }
+      add(v) { this.x += v.x; this.y += v.y; return this; }
+      sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+      mult(n) { this.x *= n; this.y *= n; return this; }
+      div(n) { this.x /= n; this.y /= n; return this; }
+      mag() { return Math.hypot(this.x, this.y); }
+      normalize() { if (this.mag() !== 0) this.div(this.mag()); return this; }
+      setMag(n) { this.normalize().mult(n); return this; }
+      limit(max) { if (this.mag() > max) this.setMag(max); return this; }
+      copy() { return new Vector(this.x, this.y); }
+      static sub(v1, v2) { return new Vector(v1.x - v2.x, v1.y - v2.y); }
     }
 
-    // Create formation target points from text using an off‑screen canvas.
-    // We use an off‑screen canvas size of 800x500 so that "welcome" is fully rendered.
     function createFormationTargets(text) {
       const offCanvas = document.createElement('canvas');
       const offCtx = offCanvas.getContext('2d');
-      offCanvas.width = 800;
-      offCanvas.height = 500;
+      offCanvas.width = 1000;  
+      offCanvas.height = 400;  
       offCtx.fillStyle = "black";
       offCtx.textAlign = "center";
       offCtx.textBaseline = "middle";
-      offCtx.font = "bold 200px sans-serif";
+      offCtx.font = "bold 300px sans-serif";  
       offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
-      
+
       const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
       const data = imageData.data;
       const points = [];
-      // Sample every 4 pixels to reduce the total count.
-      for (let y = 0; y < offCanvas.height; y += 4) {
-        for (let x = 0; x < offCanvas.width; x += 4) {
+
+      for (let y = 0; y < offCanvas.height; y += 2) {  
+        for (let x = 0; x < offCanvas.width; x += 2) {  
           let index = (y * offCanvas.width + x) * 4;
-          if (data[index + 3] > 128) { // Pixel is opaque enough.
-            points.push({ x: x, y: y });
+          if (data[index + 3] > 128) { 
+            points.push({ x, y });
           }
         }
       }
       return points;
     }
 
-    // Get formation targets for the word "welcome".
-    const formationPointsRaw = createFormationTargets("welcome");
-    // Remap targets so they are horizontally centered and 20 pixels from the top.
-    let formationTargets = formationPointsRaw.map(pt => {
-      return {
-        x: pt.x + (canvas.width - 800) / 2,
-        y: pt.y + 20  // 20 pixels from the top of the screen
-      };
-    });
+    const formationPointsRaw = createFormationTargets("WELCOME");
 
-    // Boid class representing a bird.
+    let formationTargets = formationPointsRaw.map(pt => ({
+      x: pt.x + (canvas.width - 1000) / 2,  
+      y: pt.y + 50  
+    }));
+
     class Boid {
       constructor(x, y) {
         this.position = new Vector(x, y);
-        // Start with a random direction.
         let angle = Math.random() * 2 * Math.PI;
-        this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
-        this.velocity.setMag(2);
+        this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
         this.acceleration = new Vector(0, 0);
         this.maxForce = 0.05;
         this.maxSpeed = 4;
-        // Each boid is assigned a formation target.
-        this.formationTarget = { x: x, y: y };
+        this.formationTarget = { x, y };
       }
-      
-      // Wrap around canvas edges.
+
       edges() {
         if (this.position.x > canvas.width) this.position.x = 0;
         if (this.position.x < 0) this.position.x = canvas.width;
         if (this.position.y > canvas.height) this.position.y = 0;
         if (this.position.y < 0) this.position.y = canvas.height;
       }
-      
-      // Standard flocking behavior.
+
       flock(boids) {
-        const perceptionRadius = 75;
-        let steeringAlignment = new Vector(0, 0);
-        let steeringCohesion = new Vector(0, 0);
-        let steeringSeparation = new Vector(0, 0);
+        let perceptionRadius = 75;
+        let alignment = new Vector(0, 0);
+        let cohesion = new Vector(0, 0);
+        let separation = new Vector(0, 0);
         let total = 0;
+
         for (let other of boids) {
-          if (other !== this) {
-            let d = Vector.sub(this.position, other.position).mag();
-            if (d < perceptionRadius) {
-              steeringAlignment.add(other.velocity);
-              steeringCohesion.add(other.position);
-              let diff = Vector.sub(this.position, other.position);
-              diff.div(d);
-              steeringSeparation.add(diff);
-              total++;
-            }
+          let d = Vector.sub(this.position, other.position).mag();
+          if (d < perceptionRadius) {
+            alignment.add(other.velocity);
+            cohesion.add(other.position);
+            let diff = Vector.sub(this.position, other.position);
+            diff.div(d);
+            separation.add(diff);
+            total++;
           }
         }
+
         if (total > 0) {
-          steeringAlignment.div(total);
-          steeringAlignment.setMag(this.maxSpeed);
-          steeringAlignment.sub(this.velocity);
-          steeringAlignment.limit(this.maxForce);
-          
-          steeringCohesion.div(total);
-          steeringCohesion.sub(this.position);
-          steeringCohesion.setMag(this.maxSpeed);
-          steeringCohesion.sub(this.velocity);
-          steeringCohesion.limit(this.maxForce);
-          
-          steeringSeparation.div(total);
-          steeringSeparation.setMag(this.maxSpeed);
-          steeringSeparation.sub(this.velocity);
-          steeringSeparation.limit(this.maxForce);
+          alignment.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
+          cohesion.div(total).sub(this.position).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
+          separation.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
         }
-        const alignmentWeight = 0.7;
-        const cohesionWeight = 0.7;
-        const separationWeight = 1.5;
-        this.acceleration
-          .add(steeringAlignment.mult(alignmentWeight))
-          .add(steeringCohesion.mult(cohesionWeight))
-          .add(steeringSeparation.mult(separationWeight));
+
+        this.acceleration.add(alignment.mult(0.7)).add(cohesion.mult(0.7)).add(separation.mult(1.5));
       }
-      
-      // Steering behavior to head toward the formation target.
+
       formationSteer() {
         let target = new Vector(this.formationTarget.x, this.formationTarget.y);
         let desired = Vector.sub(target, this.position);
         let d = desired.mag();
         desired.normalize();
-        // Use a slower speed (50% of maxSpeed) when forming.
-        let formationSpeed = this.maxSpeed * 0.5;
-        if (d < 100) {
-          desired.mult(formationSpeed * (d / 100));
-        } else {
-          desired.mult(formationSpeed);
-        }
-        let steer = Vector.sub(desired, this.velocity);
-        steer.limit(this.maxForce * 5);
-        this.acceleration.add(steer);
+        let speed = this.maxSpeed * 0.5;
+        desired.mult(d < 100 ? speed * (d / 100) : speed);
+        this.acceleration.add(Vector.sub(desired, this.velocity).limit(this.maxForce * 5));
       }
-      
+
       update() {
-        this.velocity.add(this.acceleration);
-        this.velocity.limit(this.maxSpeed);
+        this.velocity.add(this.acceleration).limit(this.maxSpeed);
         this.position.add(this.velocity);
         this.acceleration.mult(0);
       }
-      
+
       draw(ctx) {
         let angle = Math.atan2(this.velocity.y, this.velocity.x);
         ctx.save();
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        // Draw a simple bird-like shape.
         ctx.moveTo(10, 0);
         ctx.lineTo(-5, 4);
         ctx.lineTo(0, 0);
@@ -227,41 +153,32 @@
       }
     }
 
-    // Create 1000 boids using formation positions.
     const boids = [];
     const numBoids = 1000;
-    // Instead of random positions, use the formation targets (cycling if needed).
     for (let i = 0; i < numBoids; i++) {
       let target = formationTargets[i % formationTargets.length];
       boids.push(new Boid(target.x, target.y));
     }
-    
-    // Also assign each boid its formation target.
+
     for (let i = 0; i < boids.length; i++) {
       boids[i].formationTarget = formationTargets[i % formationTargets.length];
     }
-    
-    // Global flag to control formation mode.
+
     let formationMode = true;
-    
-    // After 2 seconds, exit formation mode (and apply a scattering impulse) so flocking begins.
     setTimeout(() => {
       formationMode = false;
-      // Give each boid a small random velocity impulse.
       boids.forEach(boid => {
         let angle = Math.random() * 2 * Math.PI;
         boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
       });
-    }, 2000);
-    
-    // Schedule formation mode at random intervals between 15 and 25 seconds.
+    }, 3000);
+
     function scheduleNextFormation() {
-      const delay = 15000 + Math.random() * 10000; // 15,000 to 25,000 ms delay.
+      let delay = 15000 + Math.random() * 10000;
       setTimeout(() => {
         formationMode = true;
         setTimeout(() => {
           formationMode = false;
-          // Optionally, apply a slight random impulse when leaving formation.
           boids.forEach(boid => {
             let angle = Math.random() * 2 * Math.PI;
             boid.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
@@ -271,40 +188,19 @@
       }, delay);
     }
     scheduleNextFormation();
-    
-    // Main animation loop.
+
     function animate() {
       requestAnimationFrame(animate);
       ctx.fillStyle = "#0000FF";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
       for (let boid of boids) {
-        if (formationMode) {
-          boid.formationSteer();
-        } else {
-          boid.flock(boids);
-        }
+        formationMode ? boid.formationSteer() : boid.flock(boids);
         boid.update();
         boid.edges();
         boid.draw(ctx);
       }
     }
     animate();
-    
-    // Recalculate canvas dimensions and formation targets on window resize.
-    window.addEventListener("resize", () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      formationTargets = formationPointsRaw.map(pt => {
-        return {
-          x: pt.x + (canvas.width - 800) / 2,
-          y: pt.y + 20  // Keep a 20px top margin.
-        };
-      });
-      for (let i = 0; i < boids.length; i++) {
-        boids[i].formationTarget = formationTargets[i % formationTargets.length];
-      }
-    });
   </script>
 </body>
 </html>
