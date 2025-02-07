@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>1000 Boids with Clouds on Perfect Blue</title>
+  <title>1000 Bird-Like Boids with Deep, Gradient Clouds</title>
   <style>
-    /* Perfect blue background: red=0, green=0, blue=255 */
+    /* Perfect blue background */
     body {
       margin: 0;
       overflow: hidden;
       background-color: #0000FF;
     }
-    /* Canvas fills the viewport */
     canvas {
       display: block;
     }
@@ -19,13 +18,13 @@
 <body>
   <canvas id="boidsCanvas"></canvas>
   <script>
-    // Set up the canvas.
+    // Set up canvas
     const canvas = document.getElementById("boidsCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // A simple 2D Vector class.
+    // 2D Vector class with common vector operations.
     class Vector {
       constructor(x, y) {
         this.x = x;
@@ -80,19 +79,19 @@
       }
     }
 
-    // Boid class for each "bird"
+    // Boid class representing each "bird"
     class Boid {
       constructor(x, y) {
         this.position = new Vector(x, y);
-        // Give each boid a random direction with a small speed.
         let angle = Math.random() * 2 * Math.PI;
-        this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(1);
+        this.velocity = new Vector(Math.cos(angle), Math.sin(angle));
+        this.velocity.setMag(1.5);
         this.acceleration = new Vector(0, 0);
-        this.maxForce = 0.05;
-        this.maxSpeed = 2;
+        this.maxForce = 0.03;  // Lower steering force for smoother, more graceful turns.
+        this.maxSpeed = 3;     // A bit faster for dynamic movement.
       }
-      
-      // Wrap around the edges of the canvas.
+
+      // Wrap around canvas edges.
       edges() {
         if (this.position.x > canvas.width)  this.position.x = 0;
         if (this.position.x < 0)             this.position.x = canvas.width;
@@ -100,59 +99,53 @@
         if (this.position.y < 0)             this.position.y = canvas.height;
       }
 
-      // Calculate steering forces based on nearby boids.
+      // Flocking behavior: alignment, cohesion, and separation.
       flock(boids) {
-        const perceptionRadius = 50;
+        const perceptionRadius = 75; // Increase radius for a more natural feel.
         let steeringAlignment = new Vector(0, 0);
         let steeringCohesion = new Vector(0, 0);
         let steeringSeparation = new Vector(0, 0);
         let total = 0;
         for (let other of boids) {
           if (other !== this) {
-            const d = Vector.sub(this.position, other.position).mag();
+            let d = Vector.sub(this.position, other.position).mag();
             if (d < perceptionRadius) {
-              // Alignment: steer toward the average velocity.
               steeringAlignment.add(other.velocity);
-              // Cohesion: steer toward the average position.
               steeringCohesion.add(other.position);
-              // Separation: steer away (weighted by distance).
               let diff = Vector.sub(this.position, other.position);
-              diff.div(d);
+              diff.div(d);  // Weight by distance.
               steeringSeparation.add(diff);
               total++;
             }
           }
         }
         if (total > 0) {
-          // Alignment
           steeringAlignment.div(total);
           steeringAlignment.setMag(this.maxSpeed);
           steeringAlignment.sub(this.velocity);
           steeringAlignment.limit(this.maxForce);
 
-          // Cohesion
           steeringCohesion.div(total);
           steeringCohesion.sub(this.position);
           steeringCohesion.setMag(this.maxSpeed);
           steeringCohesion.sub(this.velocity);
           steeringCohesion.limit(this.maxForce);
 
-          // Separation
           steeringSeparation.div(total);
           steeringSeparation.setMag(this.maxSpeed);
           steeringSeparation.sub(this.velocity);
           steeringSeparation.limit(this.maxForce);
         }
-        // Apply weighted steering.
+        // Weighting: emphasize separation slightly to avoid collisions.
         const alignmentWeight = 1.0;
         const cohesionWeight  = 1.0;
-        const separationWeight = 1.5;
+        const separationWeight = 2.0;
         this.acceleration
-            .add(steeringAlignment.mult(alignmentWeight))
-            .add(steeringCohesion.mult(cohesionWeight))
-            .add(steeringSeparation.mult(separationWeight));
+          .add(steeringAlignment.mult(alignmentWeight))
+          .add(steeringCohesion.mult(cohesionWeight))
+          .add(steeringSeparation.mult(separationWeight));
       }
-      
+
       // Update velocity and position.
       update() {
         this.velocity.add(this.acceleration);
@@ -160,18 +153,19 @@
         this.position.add(this.velocity);
         this.acceleration.mult(0);
       }
-      
-      // Draw the boid as a small black triangle.
+
+      // Draw the boid as a bird-like silhouette.
       draw(ctx) {
         let angle = Math.atan2(this.velocity.y, this.velocity.x);
         ctx.save();
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(angle);
         ctx.beginPath();
-        // Smaller triangle: tip at (5, 0) and base points at (-5, ±2.5)
-        ctx.moveTo(5, 0);
-        ctx.lineTo(-5, 2.5);
-        ctx.lineTo(-5, -2.5);
+        // A shape with a pointed tip and two slight wing extensions.
+        ctx.moveTo(10, 0);    // Tip of the bird.
+        ctx.lineTo(-5, 4);    // Lower wing.
+        ctx.lineTo(0, 0);     // Body/transition.
+        ctx.lineTo(-5, -4);   // Upper wing.
         ctx.closePath();
         ctx.fillStyle = "black";
         ctx.fill();
@@ -179,7 +173,7 @@
       }
     }
 
-    // Cloud class for simple drifting clouds.
+    // Cloud class for big, deep clouds with a fluid gradient.
     class Cloud {
       constructor(x, y, scale, speed) {
         this.x = x;
@@ -189,40 +183,44 @@
       }
       update() {
         this.x += this.speed;
-        // When a cloud moves off the right edge, reset to the left.
-        if (this.x > canvas.width + 100) {
-          this.x = -100;
+        // Reset cloud to left side when it drifts off the right.
+        if (this.x > canvas.width + 200) {
+          this.x = -200;
         }
       }
       draw(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.scale(this.scale, this.scale);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+        // Create a radial gradient that goes from pure white to a very slight dark tint.
+        let grad = ctx.createRadialGradient(150, 0, 30, 150, 0, 200);
+        grad.addColorStop(0, "rgba(255,255,255,1)");    // Center: pure white.
+        grad.addColorStop(1, "rgba(0,0,0,0.1)");          // Edge: a very subtle dark tint.
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        // Draw a simple cloud shape with overlapping arcs.
-        ctx.arc(0, 0, 20, Math.PI * 0.5, Math.PI * 1.5);
-        ctx.arc(25, -10, 20, Math.PI * 1, Math.PI * 1.85);
-        ctx.arc(50, 0, 20, Math.PI * 1.37, Math.PI * 1.91);
-        ctx.arc(65, 10, 20, Math.PI * 1.5, Math.PI * 0.5);
+        // Draw a big, flowing cloud shape using arcs.
+        ctx.arc(150, 0, 200, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(350, -40, 200, Math.PI, Math.PI * 1.75);
+        ctx.arc(550, 0, 200, Math.PI * 1.2, Math.PI * 1.8);
+        ctx.arc(700, 40, 200, Math.PI * 1.5, Math.PI * 0.5);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
       }
     }
 
-    // Create an array of clouds.
+    // Create an array of clouds with varying sizes and depths.
     const clouds = [];
-    const numClouds = 7;
+    const numClouds = 5;
     for (let i = 0; i < numClouds; i++) {
       let x = Math.random() * canvas.width;
-      let y = Math.random() * (canvas.height / 2);  // Clouds in the upper half
-      let scale = Math.random() * 0.5 + 0.5;         // Scale between 0.5 and 1.0
-      let speed = Math.random() * 0.3 + 0.1;           // Slow horizontal drift
+      let y = Math.random() * (canvas.height / 2);
+      let scale = Math.random() * 0.5 + 1.0;  // Bigger clouds.
+      let speed = Math.random() * 0.5 + 0.1;    // Varying speeds.
       clouds.push(new Cloud(x, y, scale, speed));
     }
 
-    // Create 1000 boids with random initial positions.
+    // Create 1000 boids with random starting positions.
     const boids = [];
     const numBoids = 1000;
     for (let i = 0; i < numBoids; i++) {
@@ -231,20 +229,20 @@
       boids.push(new Boid(x, y));
     }
 
-    // The animation loop.
+    // Animation loop.
     function animate() {
       requestAnimationFrame(animate);
-      // Fill the canvas with perfect blue.
+      // Draw the perfect blue background.
       ctx.fillStyle = "#0000FF";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Update and draw the clouds (background layer).
+
+      // Update and draw clouds (background layer).
       for (let cloud of clouds) {
         cloud.update();
         cloud.draw(ctx);
       }
-      
-      // For each boid, apply flocking behavior, update its state, and draw it.
+
+      // Update and draw boids (foreground layer).
       for (let boid of boids) {
         boid.flock(boids);
         boid.update();
@@ -252,10 +250,9 @@
         boid.draw(ctx);
       }
     }
-    
     animate();
 
-    // Update canvas dimensions on window resize.
+    // Adjust canvas dimensions on window resize.
     window.addEventListener("resize", () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
