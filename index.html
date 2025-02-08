@@ -18,11 +18,11 @@
 <body>
   <canvas id="canvas"></canvas>
   <script>
-    // Wrap everything in an IIFE to avoid global namespace pollution.
     (function() {
       // === Canvas Setup ===
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
+      
       function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -30,21 +30,17 @@
       resizeCanvas();
       window.addEventListener("resize", resizeCanvas);
 
-      // === Global Variables for Pointer Tracking ===
-      // This will store the current mouse/touch position.
+      // === Pointer Tracking for Mouse/Touch ===
       let pointer = null;
-      // Update pointer on mouse move.
-      document.addEventListener("mousemove", function(e) {
+      document.addEventListener("mousemove", (e) => {
         pointer = { x: e.clientX, y: e.clientY };
       });
-      // For touch devices.
-      document.addEventListener("touchmove", function(e) {
+      document.addEventListener("touchmove", (e) => {
         if (e.touches.length > 0) {
           pointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
       });
-      // Clear pointer on touch end.
-      document.addEventListener("touchend", function() {
+      document.addEventListener("touchend", () => {
         pointer = null;
       });
 
@@ -88,7 +84,9 @@
           return this;
         }
         limit(max) {
-          if (this.mag() > max) this.setMag(max);
+          if (this.mag() > max) {
+            this.setMag(max);
+          }
           return this;
         }
         copy() {
@@ -100,24 +98,24 @@
       }
 
       // === Boid Class ===
+      // Each boid is drawn as a small black triangle.
       class Boid {
         constructor(x, y) {
           this.position = new Vector(x, y);
-          // Start with a random velocity.
           let angle = Math.random() * 2 * Math.PI;
           this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
           this.acceleration = new Vector(0, 0);
           this.maxSpeed = 4;
           this.maxForce = 0.05;
         }
-        // Wrap around the edges of the canvas.
+        // Wrap around the canvas edges.
         edges() {
           if (this.position.x > canvas.width) this.position.x = 0;
           if (this.position.x < 0) this.position.x = canvas.width;
           if (this.position.y > canvas.height) this.position.y = 0;
           if (this.position.y < 0) this.position.y = canvas.height;
         }
-        // Flocking behavior: alignment, cohesion, separation.
+        // Flocking behavior (alignment, cohesion, separation).
         flock(boids) {
           let perception = 75;
           let alignment = new Vector(0, 0);
@@ -136,46 +134,32 @@
             }
           }
           if (total > 0) {
-            alignment.div(total);
-            alignment.setMag(this.maxSpeed);
-            alignment.sub(this.velocity);
-            alignment.limit(this.maxForce);
-
-            cohesion.div(total);
-            cohesion.sub(this.position);
-            cohesion.setMag(this.maxSpeed);
-            cohesion.sub(this.velocity);
-            cohesion.limit(this.maxForce);
-
-            separation.div(total);
-            separation.setMag(this.maxSpeed);
-            separation.sub(this.velocity);
-            separation.limit(this.maxForce);
+            alignment.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
+            cohesion.div(total).sub(this.position).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
+            separation.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
           }
           this.acceleration.add(alignment.mult(0.7));
           this.acceleration.add(cohesion.mult(0.7));
           this.acceleration.add(separation.mult(1.5));
         }
-        // Update boid position.
         update() {
           this.velocity.add(this.acceleration);
           this.velocity.limit(this.maxSpeed);
           this.position.add(this.velocity);
           this.acceleration.mult(0);
         }
-        // Draw the boid as a small triangle.
         draw(ctx) {
           let angle = Math.atan2(this.velocity.y, this.velocity.x);
           ctx.save();
           ctx.translate(this.position.x, this.position.y);
           ctx.rotate(angle);
           ctx.beginPath();
-          // Smaller boid shape.
-          ctx.moveTo(6, 0);
-          ctx.lineTo(-3, 2);
-          ctx.lineTo(-3, -2);
+          // Draw a smaller triangle (scaled down version):
+          ctx.moveTo(4, 0);
+          ctx.lineTo(-2, 1.5);
+          ctx.lineTo(-2, -1.5);
           ctx.closePath();
-          ctx.fillStyle = "white";
+          ctx.fillStyle = "black";
           ctx.fill();
           ctx.restore();
         }
@@ -183,22 +167,22 @@
 
       // === Create Boids ===
       const boids = [];
-      const numBoids = 1000;
+      const numBoids = 2000;  // Double the amount from 1000 to 2000
       for (let i = 0; i < numBoids; i++) {
         let x = Math.random() * canvas.width;
         let y = Math.random() * canvas.height;
         boids.push(new Boid(x, y));
       }
 
-      // === Mouse/Touch Attraction ===
-      // In the animation loop, we'll add a slight attraction force toward the pointer.
+      // === Pointer Attraction ===
+      // Each boid is slightly attracted toward the current pointer position.
       function applyPointerAttraction(boid) {
         if (pointer) {
           let target = new Vector(pointer.x, pointer.y);
           let desired = Vector.sub(target, boid.position);
           let d = desired.mag();
           desired.normalize();
-          // The strength of the attraction decreases with distance.
+          // Attraction strength decreases with distance.
           let strength = 0.05;
           desired.mult(strength);
           boid.acceleration.add(desired);
@@ -208,11 +192,10 @@
       // === Main Animation Loop ===
       function animate() {
         requestAnimationFrame(animate);
-        ctx.fillStyle = "#0000FF";
+        ctx.fillStyle = "#0000FF";  // Perfect blue background
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         boids.forEach(boid => {
           boid.flock(boids);
-          // Apply pointer attraction if available.
           applyPointerAttraction(boid);
           boid.update();
           boid.edges();
