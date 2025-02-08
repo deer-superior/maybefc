@@ -22,15 +22,14 @@
       // === Canvas Setup ===
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
-      
       function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
       }
       resizeCanvas();
       window.addEventListener("resize", resizeCanvas);
-
-      // === Pointer Tracking for Mouse/Touch ===
+      
+      // === Pointer Tracking for Mouse/Touch (Optional) ===
       let pointer = null;
       document.addEventListener("mousemove", (e) => {
         pointer = { x: e.clientX, y: e.clientY };
@@ -43,60 +42,22 @@
       document.addEventListener("touchend", () => {
         pointer = null;
       });
-
+      
       // === Vector Class ===
       class Vector {
-        constructor(x, y) {
-          this.x = x;
-          this.y = y;
-        }
-        add(v) {
-          this.x += v.x;
-          this.y += v.y;
-          return this;
-        }
-        sub(v) {
-          this.x -= v.x;
-          this.y -= v.y;
-          return this;
-        }
-        mult(n) {
-          this.x *= n;
-          this.y *= n;
-          return this;
-        }
-        div(n) {
-          this.x /= n;
-          this.y /= n;
-          return this;
-        }
-        mag() {
-          return Math.hypot(this.x, this.y);
-        }
-        normalize() {
-          let m = this.mag();
-          if (m !== 0) this.div(m);
-          return this;
-        }
-        setMag(n) {
-          this.normalize();
-          this.mult(n);
-          return this;
-        }
-        limit(max) {
-          if (this.mag() > max) {
-            this.setMag(max);
-          }
-          return this;
-        }
-        copy() {
-          return new Vector(this.x, this.y);
-        }
-        static sub(v1, v2) {
-          return new Vector(v1.x - v2.x, v1.y - v2.y);
-        }
+        constructor(x, y) { this.x = x; this.y = y; }
+        add(v) { this.x += v.x; this.y += v.y; return this; }
+        sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+        mult(n) { this.x *= n; this.y *= n; return this; }
+        div(n) { this.x /= n; this.y /= n; return this; }
+        mag() { return Math.hypot(this.x, this.y); }
+        normalize() { let m = this.mag(); if (m !== 0) this.div(m); return this; }
+        setMag(n) { this.normalize(); this.mult(n); return this; }
+        limit(max) { if (this.mag() > max) this.setMag(max); return this; }
+        copy() { return new Vector(this.x, this.y); }
+        static sub(v1, v2) { return new Vector(v1.x - v2.x, v1.y - v2.y); }
       }
-
+      
       // === Boid Class ===
       // Each boid is drawn as a small black triangle.
       class Boid {
@@ -105,8 +66,9 @@
           let angle = Math.random() * 2 * Math.PI;
           this.velocity = new Vector(Math.cos(angle), Math.sin(angle)).setMag(2);
           this.acceleration = new Vector(0, 0);
-          this.maxSpeed = 4;
-          this.maxForce = 0.05;
+          // Increase maximum speed and force for more dynamic movement.
+          this.maxSpeed = 4.5; 
+          this.maxForce = 0.06;
         }
         // Wrap around the canvas edges.
         edges() {
@@ -115,9 +77,9 @@
           if (this.position.y > canvas.height) this.position.y = 0;
           if (this.position.y < 0) this.position.y = canvas.height;
         }
-        // Flocking behavior (alignment, cohesion, separation).
+        // Flocking behavior: alignment, cohesion, and separation.
         flock(boids) {
-          let perception = 75;
+          let perception = 85; // Increased perception for more dynamic interactions.
           let alignment = new Vector(0, 0);
           let cohesion = new Vector(0, 0);
           let separation = new Vector(0, 0);
@@ -134,27 +96,42 @@
             }
           }
           if (total > 0) {
-            alignment.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
-            cohesion.div(total).sub(this.position).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
-            separation.div(total).setMag(this.maxSpeed).sub(this.velocity).limit(this.maxForce);
+            alignment.div(total);
+            alignment.setMag(this.maxSpeed);
+            alignment.sub(this.velocity);
+            alignment.limit(this.maxForce);
+            
+            cohesion.div(total);
+            cohesion.sub(this.position);
+            cohesion.setMag(this.maxSpeed);
+            cohesion.sub(this.velocity);
+            cohesion.limit(this.maxForce);
+            
+            separation.div(total);
+            separation.setMag(this.maxSpeed);
+            separation.sub(this.velocity);
+            separation.limit(this.maxForce);
           }
-          this.acceleration.add(alignment.mult(0.7));
-          this.acceleration.add(cohesion.mult(0.7));
-          this.acceleration.add(separation.mult(1.5));
+          // Slightly increased multipliers for more dynamic behavior.
+          this.acceleration.add(alignment.mult(0.8));
+          this.acceleration.add(cohesion.mult(0.8));
+          this.acceleration.add(separation.mult(1.8));
         }
+        // Update boid's velocity and position.
         update() {
           this.velocity.add(this.acceleration);
           this.velocity.limit(this.maxSpeed);
           this.position.add(this.velocity);
           this.acceleration.mult(0);
         }
+        // Draw the boid as a smaller triangle.
         draw(ctx) {
           let angle = Math.atan2(this.velocity.y, this.velocity.x);
           ctx.save();
           ctx.translate(this.position.x, this.position.y);
           ctx.rotate(angle);
           ctx.beginPath();
-          // Draw a smaller triangle (scaled down version):
+          // Smaller triangle coordinates.
           ctx.moveTo(4, 0);
           ctx.lineTo(-2, 1.5);
           ctx.lineTo(-2, -1.5);
@@ -164,35 +141,36 @@
           ctx.restore();
         }
       }
-
+      
       // === Create Boids ===
       const boids = [];
-      const numBoids = 2000;  // Double the amount from 1000 to 2000
+      const numBoids = 1500;  // Set to 1500 boids.
       for (let i = 0; i < numBoids; i++) {
         let x = Math.random() * canvas.width;
         let y = Math.random() * canvas.height;
         boids.push(new Boid(x, y));
       }
-
-      // === Pointer Attraction ===
-      // Each boid is slightly attracted toward the current pointer position.
+      
+      // === Pointer Attraction (Optional) ===
+      // Apply a slight attraction force toward the pointer.
       function applyPointerAttraction(boid) {
         if (pointer) {
           let target = new Vector(pointer.x, pointer.y);
           let desired = Vector.sub(target, boid.position);
           let d = desired.mag();
           desired.normalize();
-          // Attraction strength decreases with distance.
-          let strength = 0.05;
+          // Increase attraction strength slightly for more dynamic response.
+          let strength = 0.1;
           desired.mult(strength);
           boid.acceleration.add(desired);
         }
       }
-
+      
       // === Main Animation Loop ===
       function animate() {
         requestAnimationFrame(animate);
-        ctx.fillStyle = "#0000FF";  // Perfect blue background
+        // Clear the canvas with a perfect blue background.
+        ctx.fillStyle = "#0000FF";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         boids.forEach(boid => {
           boid.flock(boids);
